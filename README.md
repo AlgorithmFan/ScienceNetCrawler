@@ -1,2 +1,2 @@
 # ScienceNetCrawler
-Craw from web set.
+Craw from http://www.sciencenet.cn/
