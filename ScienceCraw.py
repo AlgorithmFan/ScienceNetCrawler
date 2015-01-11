@@ -1,23 +1,12 @@
 #!usr/bin/env python
 #coding:utf-8
-from selenium import webdriver
-from selenium.webdriver.common.proxy import *
+
 import re
-
-class CWebRender(webdriver.Firefox):
-    def __init__(self):
-        profile = webdriver.FirefoxProfile()
-        profile.set_preference('network.proxy.type', 1)
-        profile.set_preference('network.proxy.http', 'Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.11 (KHTML, like Gecko) Chrome/23.0.1271.64 Safari/537.11')
-        #profile.set_preference('network.proxy.http_port', 8080)
-        profile.set_preference('network.proxy.ssl', 'Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.11 (KHTML, like Gecko) Chrome/23.0.1271.64 Safari/537.11')
-        #profile.set_preference('network.proxy.ssl_port', 8080)
-        profile.update_preferences()
-        webdriver.Firefox.__init__(self, profile)
-
-    def closeUrl(self):
-        self.close()
-        self.quit()
+import time
+from WebRender import CWebRender
+from multiprocessing import Pool
+from Database import CDatabase
+from CommonFunc import connectDb
 
 class CSciencePage():
     def __init__(self):
@@ -30,9 +19,9 @@ class CSciencePage():
         mCWebRender.get(url)
 
     def getTitle(self, mCWebRender):
-        title = mCWebRender.find_element_by_xpath("//h1[@class='ph']")
-        if title:
-            return title.text
+        title = mCWebRender.find_elements_by_xpath("//h1[@class='ph']")
+        if len(title):
+            return title[0].text
         return ''
 
     def getContent(self, mCWebRender):
@@ -55,26 +44,29 @@ class CSciencePage():
                 persons_id.append(int(uidlist[0]))
         return persons_id
 
-    def nextPage(self, mCWebRender):
+    def getAllComments(self, mCWebRender):
         '''
-        Get the next page comment.
+        Get all the pages comments.
         '''
         commentModule = mCWebRender.find_element_by_id("discusscontent")
         persons = self.getCommentPersons(commentModule)
-        page = 1
-        blogId = self.pagePattern.findall(self.url)
-        blogId = int(blogId[0])
         while True:
-            page += 1
-            nextpage = commentModule.find_elements_by_link_text(u'下一页')
-            #nextpage = commentModule.find_element_by_xpath("//discusscontent/*/p/a[@onclick='viewpage(%d, %d)']" % (page, blogId))
-            if len(nextpage) == 0:
+            if not self.nextPage(mCWebRender):
                 break
-            print nextpage[0].text
-            nextpage[0].click()
-            #commentModule = mCWebRender.find_element_by_id("discusscontent")
             persons.extend(self.getCommentPersons(commentModule))
         return persons
+
+    def nextPage(self, commentModule):
+        '''
+        Get the next page comment.
+        '''
+        nextpage = commentModule.find_elements_by_link_text(u'下一页')
+        #nextpage = commentModule.find_element_by_xpath("//discusscontent/*/p/a[@onclick='viewpage(%d, %d)']" % (page, blogId))
+        if len(nextpage) == 0:
+            return False
+        nextpage[0].click()
+        time.sleep(3)
+        return True
 
     def getCommentPersons(self, commentModule):
         '''
@@ -83,7 +75,12 @@ class CSciencePage():
         commentPersons = commentModule.find_elements_by_xpath("dl/dt")
         persons = []
         for person in commentPersons:
-            idModule = person.find_element_by_xpath("a")
+            # print person.text
+            #time.sleep(1)
+            idModule = person.find_elements_by_xpath("a")
+            if len(idModule) == 0:
+                continue
+            idModule = idModule[0]
             href = idModule.get_attribute("href")
             uidlist = self.pattern.findall(href)
             timeModule = person.find_element_by_xpath("span[@class='xg1 xw0']")
@@ -93,28 +90,50 @@ class CSciencePage():
                 persons.append([person_id,person_time])
         return persons
 
-def main():
-    url = "http://blog.sciencenet.cn/blog-99934-855869.html"
-    url = "http://blog.sciencenet.cn/blog-660333-632151.html"
-    mCWebRender = CWebRender()
-    mCSciencePage = CSciencePage()
+def saveBlogPage(mCWebRender, mCSciencePage, url):
+    ''''''
     mCSciencePage.getPage(url, mCWebRender)
     title = mCSciencePage.getTitle(mCWebRender)
-    print '*'*50
-    print title
     article = mCSciencePage.getContent(mCWebRender)
-    print '*'*50
-    print article
     recPersons = mCSciencePage.getRecPersons(mCWebRender)
-    print '*'*50
-    print recPersons
+    commentPersons = mCSciencePage.getAllComments(mCWebRender)
+    return title, article, recPersons, commentPersons
 
-    print '*'*50
-    persons = mCSciencePage.nextPage(mCWebRender)
-    print 'Persons Number:', len(persons)
+def getBlog(db, itemsNum):
+    sql = 'select blog_id, blog_href from blogs where flag = 0 LIMIT %d ' %  itemsNum
+    blogs = db.InquiryTb(sql)
+    if len(blogs) == 0:
+        return False, False
+    sql = 'update blogs set flag = 1 where blog_id=%d' % blogs[0]['blog_id']
+    db.UpdateTb(sql)
+    return blogs[0]['blog_id'], blogs[0]['blog_href']
+
+
+def main():
+    db = connectDb()
+    mCWebRender = CWebRender()
+    mCSciencePage = CSciencePage()
+    while True:
+        blog_id, blog_href = getBlog(db, 1)
+        if not blog_id: break
+        print 'Blog ID: ', blog_id
+        url = 'http://blog.sciencenet.cn/' + blog_href
+        title, article, recPersons, commentPersons = saveBlogPage(mCWebRender, mCSciencePage, url)
+
+        sql = 'update blogs set blog_title="%s", blog_content="%s", flag=2 where blog_id=%d '
+        db.UpdateTb(sql % (title, article, blog_id))
+        values = [(blog_id, person) for person in recPersons]
+        sql = 'insert into recblogperson(blog_id, user_id) values(%s, %s)'
+        db.InsertTb(sql, values)
+        sql = 'insert into commentblogpersons(blog_id, user_id, time) values(%s, %s, %s)'
+        values = [(blog_id, user_id, Time) for user_id, Time in commentPersons]
+        db.InsertTb(sql, values)
+
     mCWebRender.closeUrl()
+    db.CloseDb()
     
 if __name__ == '__main__':
     main()
+    #poolFunc(4, 10)
 
 

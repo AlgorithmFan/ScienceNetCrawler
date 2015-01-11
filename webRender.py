@@ -1,7 +1,9 @@
+#!usr/bin/env python
+#coding:utf-8
 from selenium import webdriver
 from selenium.webdriver.common.proxy import *
 
-class webRender(webdriver.Firefox):
+class CWebRender(webdriver.Firefox):
     def __init__(self):
         profile = webdriver.FirefoxProfile()
         profile.set_preference('network.proxy.type', 1)
@@ -12,52 +14,6 @@ class webRender(webdriver.Firefox):
         profile.update_preferences()
         webdriver.Firefox.__init__(self, profile)
 
-
-    def loadSource(self, url, encoding='utf-8'):
-        self.get(url)
-        source = self.page_source
-        return source
-
-    def get_element_xpath(self, xpath):
-        result = self.find_element_by_xpath(xpath)
-        return result
-
-    def get_element_class(self, value):
-        result = self.find_element_by_class_name(value)
-        return result
-
-    def getPageTxt(self, url):
-        self.get(url)
-        text = list()
-        pageNum = 1
-        while True:
-            try:
-                element = self.find_element_by_id('pageNo-%d' % pageNum)
-                text.append(element.text)
-                pageNum = pageNum + 1
-                element.click()
-            except:
-                print 'over %d' % pageNum
-                return text
-        return text
-
     def closeUrl(self):
         self.close()
         self.quit()
-
-def main():
-    url = 'http://wenku.baidu.com/view/7c9d96edb8f67c1cfad6b879.html'
-    mWebRender = webRender()
-    web = mWebRender.loadSource(url)
-    result = mWebRender.get_element_class("inner")
-    if result:
-        print result
-
-    result = mWebRender.getPageTxt(url)
-    print len(result)
-    mWebRender.closeUrl()
-
-if __name__ == '__main__':
-    main()
-
-
