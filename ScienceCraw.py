@@ -25,9 +25,9 @@ class CSciencePage():
         return ''
 
     def getContent(self, mCWebRender):
-        content = mCWebRender.find_element_by_xpath("//div[@id='blog_article']")
-        if content:
-            return content.text
+        content = mCWebRender.find_elements_by_xpath("//div[@id='blog_article']")
+        if len(content):
+            return content[0].text
         return ''
 
     def getRecPersons(self, mCWebRender):
@@ -93,7 +93,15 @@ class CSciencePage():
 def saveBlogPage(mCWebRender, mCSciencePage, url):
     ''''''
     mCSciencePage.getPage(url, mCWebRender)
-    title = mCSciencePage.getTitle(mCWebRender)
+    num = 0
+    while True:
+        title = mCSciencePage.getTitle(mCWebRender)
+        num += 1
+        if len(title) != 0 or num > 20:
+            break
+        else:
+            time.sleep(30)
+            mCSciencePage.getPage(url, mCWebRender)
     article = mCSciencePage.getContent(mCWebRender)
     recPersons = mCSciencePage.getRecPersons(mCWebRender)
     commentPersons = mCSciencePage.getAllComments(mCWebRender)
