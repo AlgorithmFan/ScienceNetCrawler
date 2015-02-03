@@ -7,6 +7,10 @@ from WebRender import CWebRender
 from multiprocessing import Pool
 from Database import CDatabase
 from CommonFunc import connectDb
+import string
+
+delset = string.punctuation
+transtab = string.maketrans(delset, ','*len(delset))
 
 class CSciencePage():
     def __init__(self):
@@ -103,6 +107,7 @@ def saveBlogPage(mCWebRender, mCSciencePage, url):
             time.sleep(30)
             mCSciencePage.getPage(url, mCWebRender)
     article = mCSciencePage.getContent(mCWebRender)
+    article = article.translate(transtab)
     recPersons = mCSciencePage.getRecPersons(mCWebRender)
     commentPersons = mCSciencePage.getAllComments(mCWebRender)
     return title, article, recPersons, commentPersons
