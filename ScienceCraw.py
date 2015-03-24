@@ -3,14 +3,15 @@
 
 import re
 import time
-from WebRender import CWebRender
+from webRender import CWebRender
 from multiprocessing import Pool
 from Database import CDatabase
 from CommonFunc import connectDb
 import string
 
 delset = string.punctuation
-transtab = string.maketrans(delset, ','*len(delset))
+# transtab = string.maketrans(delset, ','*len(delset))
+transtab = dict((ord(char), u',') for char in unicode(delset))
 
 class CSciencePage():
     def __init__(self):
